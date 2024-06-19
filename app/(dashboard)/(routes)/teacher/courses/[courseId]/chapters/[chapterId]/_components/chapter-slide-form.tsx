@@ -3,6 +3,7 @@ import * as z from "zod";
 import axios from "axios";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import { getCsrfToken } from '@/lib/utils';
 import {
   Form,
   FormControl,
@@ -15,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { PlusCircle, FileText, Pencil, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -37,9 +38,16 @@ export const ChapterSlideForm = ({
   courseId,
   chapterId,
 }: ChapterSlideFormProps) => {
+  // State and other hooks
   const [isEditing, setIsEditing] = useState(false);
-  const [isUploaded, setIsUploaded] = useState(!!initialData.slideUrl); // Track if slides are uploaded initially
+  const [isUploaded, setIsUploaded] = useState(!!initialData.slideUrl);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const router = useRouter();
+
+  // Fetch CSRF token when component mounts
+  useEffect(() => {
+    getCsrfToken();
+  }, []);
 
   const toggleEditing = () => {
     setIsEditing(!isEditing);
@@ -56,10 +64,7 @@ export const ChapterSlideForm = ({
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      await axios.patch(
-        `/api/courses/${courseId}/chapters/${chapterId}`,
-        values,
-      );
+      await axios.patch(`/api/courses/${courseId}/chapters/${chapterId}`, values);
       toast.success("Slides uploaded successfully");
       toggleEditing();
       setIsUploaded(true); // Mark slides as uploaded
@@ -82,10 +87,34 @@ export const ChapterSlideForm = ({
     }
   };
 
-  const handleGenerateVideo = () => {
-    // Placeholder for functionality to be implemented later
-    toast.success("Generate Video functionality to be implemented");
-  };
+  const handleGenerateVideo = async () => {
+  try {
+    // Fetch and set the CSRF token
+    const csrfToken = await getCsrfToken();
+
+    const response = await axios.post(
+      'http://localhost:8000/watching/generate-video/',
+      { pdfUrl: form.getValues().slideUrl },  // Pass the URL of the uploaded PDF
+      {
+        headers: {
+          'X-CSRFToken': csrfToken ?? '',  // Include CSRF token in the request
+        },
+        withCredentials: true,  // Make sure cookies are included in the request
+      }
+    );
+
+    if (response.status === 200) {
+      const { videoPath } = response.data;
+      toast.success('Video generated successfully');
+      setVideoUrl(videoPath);
+    } else {
+      toast.error('Failed to generate video');
+    }
+  } catch (error) {
+    console.error('Error generating video:', error);
+    toast.error('Something went wrong while generating the video');
+  }
+};
 
   return (
     <div className="mt-6 border bg-slate-100 rounded-md p-4">
@@ -107,7 +136,6 @@ export const ChapterSlideForm = ({
           )}
         </Button>
       </div>
-
       {!isEditing &&
         (!initialData.slideUrl ? (
           <div className="flex items-center justify-center h-60 bg-slate-200 rounded-md">
@@ -117,18 +145,11 @@ export const ChapterSlideForm = ({
           <div className="relative aspect-auto mt-2">
             <iframe
               src={initialData.slideUrl}
-              className="w-full h-60 rounded-md border object-cover"
+              className="w-full h-full rounded-md border object-cover"
               title="Slides"
             />
-            <Button
-              onClick={handleRemoveSlide}
-              className="absolute top-2 right-2 bg-red-500 text-white hover:bg-red-600"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
           </div>
         ))}
-
       {isEditing && (
         <div>
           <FileUpload
@@ -144,14 +165,29 @@ export const ChapterSlideForm = ({
           </div>
         </div>
       )}
-
       {isUploaded && !isEditing && (
-        <Button
-          className="mt-4 w-full md:w-auto md:ml-auto block"
-          onClick={handleGenerateVideo}
-        >
-          Generate Video
-        </Button>
+        <div className="flex items-center space-x-2 mt-4">
+          <Button
+            className="w-full md:w-auto md:ml-auto block"
+            onClick={handleGenerateVideo}
+          >
+            Generate Video
+          </Button>
+          <Button
+            className="w-full md:w-auto md:ml-auto block bg-red-500 text-white"
+            onClick={handleRemoveSlide}
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Remove Slide
+          </Button>
+        </div>
+      )}
+      {/* Display generated video */}
+      {videoUrl && (
+        <div className="mt-4">
+          <h3 className="font-medium">Generated Video</h3>
+          <video controls src={videoUrl} className="w-full rounded-md mt-2"></video>
+        </div>
       )}
     </div>
   );
