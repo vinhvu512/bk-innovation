@@ -1,5 +1,4 @@
 "use client";
-
 import * as z from "zod";
 import axios from "axios";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,16 +6,19 @@ import { useForm } from "react-hook-form";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
-  FormItem,
   FormLabel,
+  FormItem,
   FormMessage,
 } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Pencil, FileText } from "lucide-react";
+import { PlusCircle, FileText, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 import { Chapter } from "@prisma/client";
 import { FileUpload } from "@/components/file-uploader";
 
@@ -27,7 +29,7 @@ interface ChapterSlideFormProps {
 }
 
 const formSchema = z.object({
-  slideUrl: z.string().min(1, "Slide URL is required"),
+  slideUrl: z.string().min(1),
 });
 
 export const ChapterSlideForm = ({
@@ -36,8 +38,12 @@ export const ChapterSlideForm = ({
   chapterId,
 }: ChapterSlideFormProps) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [isUploaded, setIsUploaded] = useState(!!initialData.slideUrl); // Track if slides are uploaded initially
   const router = useRouter();
-  const toggleEditing = () => setIsEditing(!isEditing);
+
+  const toggleEditing = () => {
+    setIsEditing(!isEditing);
+  };
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -54,12 +60,31 @@ export const ChapterSlideForm = ({
         `/api/courses/${courseId}/chapters/${chapterId}`,
         values,
       );
-      toast.success("Chapter updated");
+      toast.success("Slides uploaded successfully");
       toggleEditing();
+      setIsUploaded(true); // Mark slides as uploaded
       router.refresh();
     } catch (error) {
       toast.error("Something went wrong");
     }
+  };
+
+  const handleRemoveSlide = async () => {
+    try {
+      await axios.patch(`/api/courses/${courseId}/chapters/${chapterId}`, {
+        slideUrl: "",
+      });
+      toast.success("Slides removed successfully");
+      setIsUploaded(false);
+      router.refresh();
+    } catch (error) {
+      toast.error("Failed to remove slides");
+    }
+  };
+
+  const handleGenerateVideo = () => {
+    // Placeholder for functionality to be implemented later
+    toast.success("Generate Video functionality to be implemented");
   };
 
   return (
@@ -71,7 +96,7 @@ export const ChapterSlideForm = ({
           {!isEditing && !initialData.slideUrl && (
             <>
               <PlusCircle className="h-4 w-4 mr-2" />
-              Add Slides/PDF
+              Add Slides
             </>
           )}
           {!isEditing && initialData.slideUrl && (
@@ -82,21 +107,25 @@ export const ChapterSlideForm = ({
           )}
         </Button>
       </div>
+
       {!isEditing &&
         (!initialData.slideUrl ? (
           <div className="flex items-center justify-center h-60 bg-slate-200 rounded-md">
             <FileText className="h-10 w-10 text-slate-500" />
           </div>
         ) : (
-          <div className="mt-2">
-            <a
-              href={initialData.slideUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 underline"
+          <div className="relative aspect-auto mt-2">
+            <iframe
+              src={initialData.slideUrl}
+              className="w-full h-60 rounded-md border object-cover"
+              title="Slides"
+            />
+            <Button
+              onClick={handleRemoveSlide}
+              className="absolute top-2 right-2 bg-red-500 text-white hover:bg-red-600"
             >
-              View Slides/PDF
-            </a>
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </div>
         ))}
 
@@ -115,11 +144,14 @@ export const ChapterSlideForm = ({
           </div>
         </div>
       )}
-      {initialData.slideUrl && !isEditing && (
-        <div className="text-xs text-muted-foreground mt-2">
-          Slides or PDFs can take a few minutes to process. Refresh the page if
-          they do not appear.
-        </div>
+
+      {isUploaded && !isEditing && (
+        <Button
+          className="mt-4 w-full md:w-auto md:ml-auto block"
+          onClick={handleGenerateVideo}
+        >
+          Generate Video
+        </Button>
       )}
     </div>
   );
