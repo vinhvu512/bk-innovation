@@ -92,7 +92,7 @@ export const ChapterDescriptionForm = ({
         >
           {!initialData.description && "No description"}
           {initialData.description && (
-            <Preview value={initialData.description} onChange />
+            <Preview value={initialData.description} />
           )}
         </div>
       )}
